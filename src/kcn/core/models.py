@@ -7,7 +7,7 @@ Esto hace que la lógica sea fácil de testear y de reutilizar desde cualquier U
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import Enum
 
@@ -60,6 +60,12 @@ class Goal(str, Enum):
             Goal.GAIN: "Ganar músculo",
         }[self]
 
+class DayType(str, Enum):
+    """Tipo de día para el ciclado de carbohidratos."""
+
+    TRAINING = "training"
+    REST = "rest"
+
 
 @dataclass
 class UserProfile:
@@ -83,6 +89,9 @@ class UserProfile:
     fat_per_kg: float = 0.9
     weekly_rate_kg: float = 0.5
     meal_count: int = 5
+    weekly_rate_kg: float = 0.5
+    meal_count: int = 5
+    carb_cycle_pct: float = 0.0   # 0 = sin ciclado; p. ej. 0.15 = ±15% en carbos
 
     def __post_init__(self) -> None:
         # Validación básica: mejor fallar pronto que calcular con datos absurdos.
@@ -96,6 +105,8 @@ class UserProfile:
             raise ValueError("meal_count debe ser >= 1")
         if self.protein_per_kg < 0 or self.fat_per_kg < 0:
             raise ValueError("protein_per_kg y fat_per_kg deben ser >= 0")
+        if self.carb_cycle_pct < 0:
+            raise ValueError("carb_cycle_pct debe ser >= 0")
 
 
 @dataclass
@@ -158,6 +169,7 @@ class Food:
     brand: str | None = None
     barcode: str | None = None
     default_serving_g: float | None = None  # ración típica (p. ej. 1 aguacate ≈ 200 g)
+    favorite: bool = False
     id: int | None = None                    # lo asigna la base de datos
 
     def macros_for(self, grams: float) -> MacroTargets:
@@ -194,3 +206,107 @@ class FoodEntry:
     def macros(self) -> MacroTargets:
         """Macros de este registro (según los gramos consumidos)."""
         return self.food.macros_for(self.grams)
+
+@dataclass
+class Workout:
+    """Entreno registrado de forma general (sin sincronización con salud).
+
+    El usuario describe el entreno ('Natación 30 min', 'Hyrox', 'Calistenia') y
+    le asocia una estimación de kcal, que ampliarán su margen del día.
+    """
+
+    description: str
+    calories: int
+    duration_min: int | None = None
+    on: date = None
+    id: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.on is None:
+            self.on = date.today()
+        if self.calories < 0:
+            raise ValueError("calories debe ser >= 0")
+
+@dataclass
+class BodyMeasurement:
+    """Medidas corporales en una fecha concreta.
+
+    Todos los campos salvo la fecha son OPCIONALES: el usuario rellena lo que le
+    dé su báscula (o lo que quiera seguir). Diseñado para ampliarse con más
+    campos en el futuro sin romper nada.
+    """
+
+    on: date = None
+    weight_kg: float | None = None
+    body_fat_pct: float | None = None       # % de grasa corporal
+    water_pct: float | None = None          # % de agua / hidratación
+    muscle_mass_kg: float | None = None     # masa muscular
+    bone_mass_kg: float | None = None       # masa ósea
+    visceral_fat: float | None = None       # índice de grasa visceral
+    metabolic_age: int | None = None        # edad metabólica
+    note: str | None = None
+    id: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.on is None:
+            self.on = date.today()
+
+@dataclass
+class WaterEntry:
+    """Un registro de agua bebida (p. ej. un vaso de 250 ml)."""
+
+    ml: int
+    on: date = None
+    at: datetime = None
+    id: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.at is None:
+            self.at = datetime.now()
+        if self.on is None:
+            self.on = self.at.date()
+        if self.ml <= 0:
+            raise ValueError("ml debe ser > 0")
+@dataclass
+class RecipeItem:
+    """Un ingrediente de una receta: un alimento y su cantidad."""
+
+    food: Food
+    grams: float
+
+    def __post_init__(self) -> None:
+        if self.grams <= 0:
+            raise ValueError("grams debe ser > 0")
+
+
+@dataclass
+class Recipe:
+    """Un plato compuesto por varios alimentos (p. ej. tu batido post-entreno).
+
+    `servings` = para cuántas raciones es el total de la receta.
+    """
+
+    name: str
+    items: list[RecipeItem] = field(default_factory=list)
+    servings: int = 1
+    id: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.servings < 1:
+            raise ValueError("servings debe ser >= 1")
+
+    def total_macros(self) -> MacroTargets:
+        """Macros de la receta completa."""
+        total = MacroTargets(0, 0, 0, 0)
+        for item in self.items:
+            total = total + item.food.macros_for(item.grams)
+        return total
+
+    def per_serving(self) -> MacroTargets:
+        """Macros por ración."""
+        t = self.total_macros()
+        s = self.servings
+        return MacroTargets(round(t.kcal / s), round(t.protein_g / s),
+                            round(t.carbs_g / s), round(t.fat_g / s))
+
+    

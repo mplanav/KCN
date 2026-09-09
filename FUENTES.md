@@ -75,3 +75,32 @@ _Última verificación: 2026-09-09._
 - **Buenas prácticas:** User-Agent identificativo (requisito de OFF).
 - **Fuente:** https://world.openfoodfacts.org ·
   docs https://openfoodfacts.github.io/openfoodfacts-server/api/
+
+  ## #9 — IMC (Índice de Masa Corporal) y clasificación: OMS
+- **Fórmula:** IMC = peso(kg) / altura(m)².
+- **Categorías (OMS):** <18.5 bajo peso · 18.5–24.9 normopeso · 25–29.9
+  sobrepeso · ≥30 obesidad.
+- **Caveat importante:** el IMC no distingue músculo de grasa; en personas muy
+  musculadas (deportistas) sobreestima el exceso de grasa. Por eso KCN prioriza
+  el % de grasa corporal cuando el usuario lo aporta con su báscula.
+- **Fuente:** OMS — https://www.who.int/health-topics/obesity
+
+## #10 — Ingesta adecuada de agua: EFSA
+- **Valores (agua total/día):** 2,5 L hombres · 2,0 L mujeres (adultos).
+- **Nota:** incluye el agua de los alimentos (~20-30%). Es una referencia; con
+  ejercicio intenso o calor hay que beber más para reponer el sudor. El usuario
+  puede ajustar su objetivo.
+- **Fuente:** EFSA (2010), Scientific Opinion on Dietary Reference Values for water.
+
+## #11 — Ciclado de carbohidratos por tipo de día (estrategia)
+- **Qué hacemos:** en días de entreno subimos carbohidratos; en descanso los
+  bajamos. Proteína (ISSN #3) y grasa (AMDR #4) se mantienen. OPCIONAL y
+  desactivado por defecto.
+- **Base:** periodización de carbohidratos ("fuel for the work required"),
+  práctica habitual en nutrición deportiva.
+- **Honestidad:** es una ESTRATEGIA, no una regla exacta. El balance semanal
+  depende de tu proporción de días entreno/descanso; con un % moderado y un
+  reparto equilibrado apenas altera tu objetivo. Además, registrar el ejercicio
+  ya añade margen los días que entrenas.
+- **Fuente:** ISSN Nutrient Timing Position Stand (Kerksick et al., 2017),
+  J Int Soc Sports Nutr.

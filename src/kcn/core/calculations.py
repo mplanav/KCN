@@ -13,7 +13,7 @@ Pipeline:
 
 from __future__ import annotations
 
-from kcn.core.models import Goal, MacroTargets, MealTarget, Sex, UserProfile
+from kcn.core.models import DayType, Goal, MacroTargets, MealTarget, Sex, UserProfile
 
 # Factores de Atwater: energía por gramo de macronutriente (kcal). [FUENTES.md #5]
 KCAL_PER_G_PROTEIN = 4
@@ -170,3 +170,57 @@ def split_into_meals(
             m = targets.remaining(acc)
         meals.append(MealTarget(name=name, weight=w, targets=m))
     return meals
+
+# --- IMC (Índice de Masa Corporal), clasificación OMS [#9] -------------------
+
+def bmi(weight_kg: float, height_cm: float) -> float:
+    """Índice de Masa Corporal = peso(kg) / altura(m)²."""
+    h = height_cm / 100.0
+    return weight_kg / (h * h)
+
+
+def bmi_category(value: float) -> str:
+    """Clasificación de la OMS. Ojo: el IMC no distingue músculo de grasa."""
+    if value < 18.5:
+        return "Bajo peso"
+    if value < 25:
+        return "Normopeso"
+    if value < 30:
+        return "Sobrepeso"
+    return "Obesidad"
+
+# --- Agua: ingesta adecuada de agua total (EFSA) [#10] -----------------------
+
+WATER_AI_ML = {Sex.MALE: 2500, Sex.FEMALE: 2000}
+
+
+def default_water_goal_ml(profile: UserProfile) -> int:
+    """Objetivo diario de agua (ml) por defecto, según la EFSA.
+
+    Es una referencia; entrenando fuerte o con calor conviene beber más para
+    reponer el sudor. El usuario podrá ajustarlo.
+    """
+    return WATER_AI_ML[profile.sex]
+
+# --- Objetivos por tipo de día (ciclado de carbohidratos) [#11] --------------
+
+def day_targets(profile: UserProfile, day_type: DayType) -> MacroTargets:
+    """Objetivos ajustados al tipo de día.
+
+    El desplazamiento va SOLO a los carbohidratos; proteína y grasa se mantienen.
+    Si el ciclado está desactivado (carb_cycle_pct = 0), devuelve el objetivo base.
+    """
+    base = macro_targets(profile)
+    if profile.carb_cycle_pct <= 0:
+        return base
+
+    shift_kcal = round(profile.carb_cycle_pct * base.kcal)
+    if day_type is DayType.REST:
+        shift_kcal = -shift_kcal
+
+    carbs_g = max(base.carbs_g + round(shift_kcal / KCAL_PER_G_CARB), 0)
+    kcal = base.protein_g * KCAL_PER_G_PROTEIN + carbs_g * KCAL_PER_G_CARB \
+        + base.fat_g * KCAL_PER_G_FAT
+
+    return MacroTargets(kcal=kcal, protein_g=base.protein_g,
+                        carbs_g=carbs_g, fat_g=base.fat_g)

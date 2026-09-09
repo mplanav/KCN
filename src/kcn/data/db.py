@@ -56,6 +56,63 @@ CREATE TABLE IF NOT EXISTS food_entries (
 );
 
 CREATE INDEX IF NOT EXISTS idx_entries_date ON food_entries(on_date);
+
+
+-- Entrenos: kcal quemadas que amplían el margen del día.
+CREATE TABLE IF NOT EXISTS workouts (
+    id           INTEGER PRIMARY KEY,
+    description  TEXT    NOT NULL,
+    calories     INTEGER NOT NULL,
+    duration_min INTEGER,
+    on_date      TEXT    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_workouts_date ON workouts(on_date);
+
+
+-- Historial de medidas corporales (báscula). Todos los campos opcionales.
+CREATE TABLE IF NOT EXISTS body_measurements (
+    id             INTEGER PRIMARY KEY,
+    on_date        TEXT NOT NULL,
+    weight_kg      REAL,
+    body_fat_pct   REAL,
+    water_pct      REAL,
+    muscle_mass_kg REAL,
+    bone_mass_kg   REAL,
+    visceral_fat   REAL,
+    metabolic_age  INTEGER,
+    note           TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_measurements_date ON body_measurements(on_date);
+
+
+-- Registros de agua bebida.
+CREATE TABLE IF NOT EXISTS water_entries (
+    id      INTEGER PRIMARY KEY,
+    ml      INTEGER NOT NULL,
+    on_date TEXT    NOT NULL,
+    at_ts   TEXT    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_water_date ON water_entries(on_date);
+
+
+-- Recetas / platos compuestos.
+CREATE TABLE IF NOT EXISTS recipes (
+    id       INTEGER PRIMARY KEY,
+    name     TEXT NOT NULL,
+    servings INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS recipe_items (
+    id        INTEGER PRIMARY KEY,
+    recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    food_id   INTEGER NOT NULL REFERENCES foods(id),
+    grams     REAL    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_items_recipe ON recipe_items(recipe_id);
 """
 
 
@@ -74,11 +131,24 @@ def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")  # respetar las claves foráneas
     return conn
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Migraciones ligeras para bases de datos ya existentes."""
+    cols = [r["name"] for r in conn.execute("PRAGMA table_info(foods)")]
+    if "favorite" not in cols:
+        conn.execute("ALTER TABLE foods ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
+
+    pcols = [r["name"] for r in conn.execute("PRAGMA table_info(profile)")]
+    if "carb_cycle_pct" not in pcols:
+        conn.execute("ALTER TABLE profile ADD COLUMN carb_cycle_pct REAL NOT NULL DEFAULT 0")
+
+    conn.commit()
+
 
 def init_db(conn: sqlite3.Connection) -> None:
     """Crea las tablas e índices si no existen."""
     conn.executescript(SCHEMA)
     conn.commit()
+    _migrate(conn)
 
 
 def connect(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
@@ -86,3 +156,6 @@ def connect(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     conn = get_connection(db_path)
     init_db(conn)
     return conn
+
+
+
