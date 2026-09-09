@@ -8,6 +8,7 @@ Esto hace que la lógica sea fácil de testear y de reutilizar desde cualquier U
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime
 from enum import Enum
 
 
@@ -132,3 +133,64 @@ class MealTarget:
     name: str          # "Desayuno", "Comida"...
     weight: float      # Fracción del total diario (0-1)
     targets: MacroTargets
+
+class FoodSource(str, Enum):
+    """Origen de un alimento."""
+
+    CUSTOM = "custom"        # Creado por ti (p. ej. el aguacate del mercado)
+    OPEN_FOOD_FACTS = "off"  # Importado de Open Food Facts (barcode/búsqueda)
+
+
+@dataclass
+class Food:
+    """Alimento con su información nutricional por 100 g.
+
+    Guardamos siempre "por 100 g" (como en las etiquetas y en Open Food Facts)
+    y calculamos los macros de cada cantidad concreta con `macros_for`.
+    """
+
+    name: str
+    kcal_per_100g: float
+    protein_per_100g: float
+    carbs_per_100g: float
+    fat_per_100g: float
+    source: FoodSource = FoodSource.CUSTOM
+    brand: str | None = None
+    barcode: str | None = None
+    default_serving_g: float | None = None  # ración típica (p. ej. 1 aguacate ≈ 200 g)
+    id: int | None = None                    # lo asigna la base de datos
+
+    def macros_for(self, grams: float) -> MacroTargets:
+        """Macros para una cantidad dada en gramos."""
+        factor = grams / 100.0
+        return MacroTargets(
+            kcal=round(self.kcal_per_100g * factor),
+            protein_g=round(self.protein_per_100g * factor),
+            carbs_g=round(self.carbs_per_100g * factor),
+            fat_g=round(self.fat_per_100g * factor),
+        )
+
+
+@dataclass
+class FoodEntry:
+    """Un alimento consumido, en una comida concreta y una fecha concreta."""
+
+    food: Food
+    grams: float
+    meal_index: int = 0                      # 0 = primera comida del día
+    on: date = None                          # se rellena en __post_init__
+    at: datetime = None                      # momento exacto del registro
+    id: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.at is None:
+            self.at = datetime.now()
+        if self.on is None:
+            self.on = self.at.date()
+        if self.grams <= 0:
+            raise ValueError("grams debe ser > 0")
+
+    @property
+    def macros(self) -> MacroTargets:
+        """Macros de este registro (según los gramos consumidos)."""
+        return self.food.macros_for(self.grams)
