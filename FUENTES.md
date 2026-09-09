@@ -60,3 +60,18 @@ etiqueta `[#N]` que remite a esta lista.
 
 ---
 _Última verificación: 2026-09-09._
+
+## #8 — Datos de alimentos: Open Food Facts
+- **Qué usamos:** info nutricional por 100 g (energía kcal, proteínas, carbos,
+  grasas), nombre, marca y código de barras.
+- **Endpoints:** producto por código
+  `https://world.openfoodfacts.org/api/v2/product/{barcode}.json`; búsqueda de
+  texto vía Search-a-licious `https://search.openfoodfacts.org/search` (solo
+  devuelve códigos), hidratada con `.../api/v2/search?code=...`.
+- **Naturaleza del dato:** base **colaborativa** bajo Open Database License
+  (ODbL). NO es una autoridad sanitaria: puede haber errores u omisiones. Por
+  eso KCN permite crear y editar alimentos propios y prioriza el código de
+  barras (más fiable) frente a la búsqueda por texto.
+- **Buenas prácticas:** User-Agent identificativo (requisito de OFF).
+- **Fuente:** https://world.openfoodfacts.org ·
+  docs https://openfoodfacts.github.io/openfoodfacts-server/api/
