@@ -13,7 +13,7 @@ Pipeline:
 
 from __future__ import annotations
 
-from kcn.core.models import DayType, Goal, MacroTargets, MealTarget, Sex, UserProfile
+from kcn.core.models import DayType, FoodRole, Goal, MacroTargets, MealTarget, Sex, UserProfile
 
 # Factores de Atwater: energía por gramo de macronutriente (kcal). [FUENTES.md #5]
 KCAL_PER_G_PROTEIN = 4
@@ -224,3 +224,17 @@ def day_targets(profile: UserProfile, day_type: DayType) -> MacroTargets:
 
     return MacroTargets(kcal=kcal, protein_g=base.protein_g,
                         carbs_g=carbs_g, fat_g=base.fat_g)
+
+def infer_role(food) -> FoodRole:
+    """Rol aproximado según qué macro aporta más energía. No distingue verdura/fruta."""
+    p = food.protein_per_100g * KCAL_PER_G_PROTEIN
+    c = food.carbs_per_100g * KCAL_PER_G_CARB
+    f = food.fat_per_100g * KCAL_PER_G_FAT
+    top = max(p, c, f)
+    if top <= 0:
+        return FoodRole.OTHER
+    if top == p:
+        return FoodRole.PROTEIN
+    if top == c:
+        return FoodRole.CARB
+    return FoodRole.FAT

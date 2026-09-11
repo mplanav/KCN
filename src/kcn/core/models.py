@@ -151,6 +151,24 @@ class FoodSource(str, Enum):
     CUSTOM = "custom"        # Creado por ti (p. ej. el aguacate del mercado)
     OPEN_FOOD_FACTS = "off"  # Importado de Open Food Facts (barcode/búsqueda)
 
+class FoodRole(str, Enum):
+    """Rol culinario de un alimento (para armar platos coherentes)."""
+
+    PROTEIN = "protein"
+    CARB = "carb"
+    FAT = "fat"
+    VEGETABLE = "vegetable"
+    FRUIT = "fruit"
+    DAIRY = "dairy"
+    OTHER = "other"
+
+
+class MealType(str, Enum):
+    """Tipo de comida al que encaja un alimento/receta."""
+
+    BREAKFAST = "breakfast"   # desayuno
+    MAIN = "main"             # comida / cena
+    SNACK = "snack"           # media mañana / merienda / recena
 
 @dataclass
 class Food:
@@ -170,6 +188,8 @@ class Food:
     barcode: str | None = None
     default_serving_g: float | None = None  # ración típica (p. ej. 1 aguacate ≈ 200 g)
     favorite: bool = False
+    role: FoodRole = FoodRole.OTHER
+    meal_tags: list[MealType] = field(default_factory=list)
     id: int | None = None                    # lo asigna la base de datos
 
     def macros_for(self, grams: float) -> MacroTargets:
@@ -322,3 +342,4 @@ class ReminderSettings:
     water_interval_hours: int = 2
     water_start_hour: int = 10
     water_end_hour: int = 22
+

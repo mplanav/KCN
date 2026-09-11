@@ -148,6 +148,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "carb_cycle_pct" not in pcols:
         conn.execute("ALTER TABLE profile ADD COLUMN carb_cycle_pct REAL NOT NULL DEFAULT 0")
 
+    cols = [r["name"] for r in conn.execute("PRAGMA table_info(foods)")]
+    if "favorite" not in cols:
+        conn.execute("ALTER TABLE foods ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
+    if "role" not in cols:
+        conn.execute("ALTER TABLE foods ADD COLUMN role TEXT")
+    if "meal_tags" not in cols:
+        conn.execute("ALTER TABLE foods ADD COLUMN meal_tags TEXT")
+
     conn.commit()
 
 

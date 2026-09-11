@@ -18,10 +18,13 @@ from kcn.core.models import (
     Food,
     FoodEntry,
     FoodSource,
+    FoodRole,
     Goal,
     MacroTargets,
+    MealType,
     Recipe, 
     RecipeItem,
+    ReminderSettings,
     Sex,
     UserProfile,
     WaterEntry,
@@ -71,13 +74,15 @@ def get_profile(conn: sqlite3.Connection) -> UserProfile | None:
 # --- Alimentos ---------------------------------------------------------------
 
 def _row_to_food(row: sqlite3.Row) -> Food:
+    role = FoodRole(row["role"]) if row["role"] else FoodRole.OTHER
+    tags = [MealType(t) for t in json.loads(row["meal_tags"])] if row["meal_tags"] else []
     return Food(
         id=row["id"], name=row["name"], brand=row["brand"], barcode=row["barcode"],
         source=FoodSource(row["source"]),
         kcal_per_100g=row["kcal_per_100g"], protein_per_100g=row["protein_per_100g"],
         carbs_per_100g=row["carbs_per_100g"], fat_per_100g=row["fat_per_100g"],
-        default_serving_g=row["default_serving_g"],
-        favorite=bool(row["favorite"]),
+        default_serving_g=row["default_serving_g"], favorite=bool(row["favorite"]),
+        role=role, meal_tags=tags,
     )
 
 
@@ -87,12 +92,13 @@ def add_food(conn: sqlite3.Connection, food: Food) -> Food:
         """
         INSERT INTO foods (name, brand, barcode, source, kcal_per_100g,
                            protein_per_100g, carbs_per_100g, fat_per_100g,
-                           default_serving_g, favorite)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           default_serving_g, favorite, role, meal_tags)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (food.name, food.brand, food.barcode, food.source.value,
          food.kcal_per_100g, food.protein_per_100g, food.carbs_per_100g,
-         food.fat_per_100g, food.default_serving_g, int(food.favorite)),
+         food.fat_per_100g, food.default_serving_g, int(food.favorite),
+         food.role.value, json.dumps([t.value for t in food.meal_tags])),
     )
     conn.commit()
     food.id = cur.lastrowid
@@ -174,7 +180,7 @@ def get_entries_for_date(conn: sqlite3.Connection, on: date) -> list[FoodEntry]:
             e.id AS entry_id, e.grams, e.meal_index, e.on_date, e.at_ts,
             f.id AS food_id, f.name, f.brand, f.barcode, f.source,
             f.kcal_per_100g, f.protein_per_100g, f.carbs_per_100g,
-            f.fat_per_100g, f.default_serving_g, f.favorite
+                        f.fat_per_100g, f.default_serving_g, f.favorite, f.role, f.meal_tags
         FROM food_entries e
         JOIN foods f ON f.id = e.food_id
         WHERE e.on_date = ?
@@ -466,3 +472,13 @@ def get_reminder_settings(conn: sqlite3.Connection) -> ReminderSettings:
     if row is None:
         return ReminderSettings()          # valores por defecto
     return ReminderSettings(**json.loads(row["value"]))
+
+def set_food_role(conn: sqlite3.Connection, food_id: int,
+                  role: "FoodRole | None" = None,
+                  meal_tags: "list[MealType] | None" = None) -> None:
+    if role is not None:
+        conn.execute("UPDATE foods SET role = ? WHERE id = ?", (role.value, food_id))
+    if meal_tags is not None:
+        conn.execute("UPDATE foods SET meal_tags = ? WHERE id = ?",
+                     (json.dumps([t.value for t in meal_tags]), food_id))
+    conn.commit()
