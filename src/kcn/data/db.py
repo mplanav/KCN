@@ -113,6 +113,13 @@ CREATE TABLE IF NOT EXISTS recipe_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_recipe_items_recipe ON recipe_items(recipe_id);
+
+
+-- Ajustes de la app (clave/valor en JSON), p. ej. los recordatorios.
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 

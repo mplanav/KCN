@@ -309,4 +309,16 @@ class Recipe:
         return MacroTargets(round(t.kcal / s), round(t.protein_g / s),
                             round(t.carbs_g / s), round(t.fat_g / s))
 
-    
+
+@dataclass
+class ReminderSettings:
+    """Preferencias de recordatorios (todo configurable por el usuario)."""
+
+    meals_enabled: bool = True
+    meal_times: list[str] = field(default_factory=list)   # "HH:MM" por comida; vacío = por defecto
+    weight_enabled: bool = True
+    weight_every_days: int = 5
+    water_enabled: bool = True
+    water_interval_hours: int = 2
+    water_start_hour: int = 10
+    water_end_hour: int = 22

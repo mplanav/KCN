@@ -6,6 +6,8 @@ estas funciones.
 """
 
 from __future__ import annotations
+import json
+from dataclasses import asdict
 
 import sqlite3
 from datetime import date, datetime
@@ -447,3 +449,20 @@ def log_recipe(conn: sqlite3.Connection, recipe_id: int, meal_index: int = 0,
         entry = FoodEntry(food=item.food, grams=item.grams * factor, meal_index=meal_index)
         entries.append(add_entry(conn, entry))
     return entries
+
+# --- Ajustes de recordatorios ------------------------------------------------
+
+def save_reminder_settings(conn: sqlite3.Connection, settings: ReminderSettings) -> None:
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('reminders', ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (json.dumps(asdict(settings)),),
+    )
+    conn.commit()
+
+
+def get_reminder_settings(conn: sqlite3.Connection) -> ReminderSettings:
+    row = conn.execute("SELECT value FROM settings WHERE key = 'reminders'").fetchone()
+    if row is None:
+        return ReminderSettings()          # valores por defecto
+    return ReminderSettings(**json.loads(row["value"]))
