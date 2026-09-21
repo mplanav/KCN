@@ -482,3 +482,15 @@ def set_food_role(conn: sqlite3.Connection, food_id: int,
         conn.execute("UPDATE foods SET meal_tags = ? WHERE id = ?",
                      (json.dumps([t.value for t in meal_tags]), food_id))
     conn.commit()
+
+def measurement_series(conn: sqlite3.Connection, field: str) -> list[tuple[date, float]]:
+    """Serie temporal (fecha, valor) de una métrica corporal, ascendente."""
+    col = {
+        "weight": "weight_kg", "body_fat": "body_fat_pct", "water": "water_pct",
+        "muscle": "muscle_mass_kg", "bone": "bone_mass_kg", "visceral": "visceral_fat",
+    }[field]
+    rows = conn.execute(
+        f"SELECT on_date, {col} AS v FROM body_measurements "
+        f"WHERE {col} IS NOT NULL ORDER BY on_date ASC, id ASC"
+    ).fetchall()
+    return [(date.fromisoformat(r["on_date"]), r["v"]) for r in rows]
