@@ -9,9 +9,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-# Fichero de datos por defecto: ~/.kcn/kcn.db (oculto, en el home del usuario).
 DEFAULT_DB_PATH = Path.home() / ".kcn" / "kcn.db"
-
 # Esquema. Se ejecuta con "IF NOT EXISTS", así que es seguro llamarlo siempre.
 SCHEMA = """
 -- Perfil del usuario: una sola fila (CHECK id = 1 lo garantiza).

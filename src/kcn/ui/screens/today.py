@@ -1,4 +1,4 @@
-"""Pantalla de Hoy: resumen del día, registros por comida, agua y ejercicio."""
+"""Dashboard 'Hoy' unificado: comida, agua, entreno, dinero y hábitos."""
 
 from __future__ import annotations
 
@@ -6,19 +6,19 @@ from datetime import date
 
 import flet as ft
 
-from kcn.core.models import WaterEntry, Workout
+from kcn.core.models import WaterEntry
 from kcn.data import repository as repo
 from kcn.services import day as day_service
 from kcn.services import recommender as rec_service
+from kcn.fitness import repo as fitrepo
+from kcn.finance import repo as finrepo
+from kcn.habits import repo as habrepo
 from kcn.ui import components as comp
 from kcn.ui import theme as t
 
 
-def _num(value, default=0.0):
-    try:
-        return float(str(value).replace(",", "."))
-    except (TypeError, ValueError):
-        return default
+def _eur(x: float) -> str:
+    return f"{x:.0f} €"
 
 
 def _mealplan_controls(mp) -> list[ft.Control]:
@@ -45,7 +45,7 @@ def build_today(state, page: ft.Page) -> ft.Control:
             bgcolor=t.BG, expand=True, padding=16,
             content=comp.card(ft.Column(
                 [ft.Text("Bienvenido a KCN", size=22, weight=ft.FontWeight.BOLD, color=t.TEXT),
-                 ft.Text("Crea tu perfil en la pestaña Perfil para empezar.", color=t.MUTED)],
+                 ft.Text("Crea tu perfil en la pestaña Yo → Perfil para empezar.", color=t.MUTED)],
                 spacing=8)))
 
     data_col = ft.Column(spacing=16)
@@ -59,53 +59,39 @@ def build_today(state, page: ft.Page) -> ft.Control:
         rem = summary.remaining.kcal
         ratio = (consumed / budget) if budget > 0 else 0.0
 
-        def del_entry(eid):
-            repo.delete_entry(conn, eid)
-            render()
-            page.update()
-
         def add_water(ml):
             repo.add_water(conn, WaterEntry(ml=ml))
-            render()
-            page.update()
+            render(); page.update()
 
-        hero = comp.card(ft.Column([
+        def toggle_habit(hid, value):
+            habrepo.set_done(conn, hid, today, value)
+            render(); page.update()
+
+        # Calorías
+        cal_card = comp.card(ft.Column([
             comp.label("Calorías de hoy"),
-            ft.Row([ft.Text(str(consumed), size=42, weight=ft.FontWeight.BOLD, color=t.KCAL),
+            ft.Row([ft.Text(str(consumed), size=40, weight=ft.FontWeight.BOLD, color=t.KCAL),
                     ft.Text(f"/ {budget} kcal", size=14, color=t.MUTED)],
                    vertical_alignment=ft.CrossAxisAlignment.END, spacing=8),
             ft.ProgressBar(value=min(max(ratio, 0), 1), color=t.KCAL, bgcolor=t.SURFACE_2),
-            ft.Row([ft.Text(f"Restan {rem} kcal", color=(t.ACCENT if rem >= 0 else t.FAT),
-                            weight=ft.FontWeight.W_500),
-                    ft.Text(f"Objetivo {summary.target.kcal} · Ejercicio +{summary.exercise_kcal}",
-                            color=t.MUTED, size=12)],
-                   alignment=ft.MainAxisAlignment.SPACE_BETWEEN)], spacing=10))
-
-        macros = comp.card(ft.Column([
-            comp.label("Macros"),
+            ft.Text(f"Restan {rem} kcal", color=(t.ACCENT if rem >= 0 else t.FAT),
+                    weight=ft.FontWeight.W_500),
             comp.macro_bar("Proteína", summary.consumed.protein_g, summary.target.protein_g, t.PROTEIN),
             comp.macro_bar("Carbos", summary.consumed.carbs_g, summary.target.carbs_g, t.CARB),
             comp.macro_bar("Grasa", summary.consumed.fat_g, summary.target.fat_g, t.FAT)],
-            spacing=12))
+            spacing=10))
 
-        meals_col = ft.Column(spacing=14)
-        for m in summary.meals:
-            r = (m.consumed.kcal / m.target.kcal) if m.target.kcal > 0 else 0.0
-            rows = [ft.Row([ft.Text(m.name, color=t.TEXT, weight=ft.FontWeight.W_500),
-                            ft.Text(f"{m.consumed.kcal} / {m.target.kcal} kcal", color=t.MUTED, size=12)],
-                           alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                    ft.ProgressBar(value=min(max(r, 0), 1), color=t.KCAL, bgcolor=t.SURFACE_2)]
-            for entry in m.entries:
-                em = entry.macros
-                rows.append(ft.Row([
-                    ft.Text(f"{round(entry.grams)} g {entry.food.name}", color=t.MUTED, size=12, expand=True),
-                    ft.Text(f"{em.kcal} kcal", color=t.MUTED, size=12),
-                    ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_size=18, icon_color=t.FAT,
-                                  on_click=lambda e, eid=entry.id: del_entry(eid))],
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER))
-            meals_col.controls.append(ft.Column(rows, spacing=4))
-        meals_card = comp.card(ft.Column([comp.label("Comidas"), meals_col], spacing=12))
+        # Entreno + Dinero (tiles)
+        income = finrepo.get_income(conn)
+        spent = finrepo.month_spent(conn, today.year, today.month)
+        avail = income - spent
+        n_sessions = len(fitrepo.get_sessions_for_date(conn, today))
+        tiles = ft.Row([
+            comp.stat_tile("Entreno hoy", f"{summary.exercise_kcal} kcal", t.ACCENT),
+            comp.stat_tile("Disponible (mes)", _eur(avail), t.ACCENT if avail >= 0 else t.FAT)],
+            spacing=10)
 
+        # Agua
         wr = (summary.water_ml / summary.water_goal_ml) if summary.water_goal_ml > 0 else 0.0
 
         def wbtn(ml):
@@ -121,44 +107,28 @@ def build_today(state, page: ft.Page) -> ft.Control:
             ft.ProgressBar(value=min(max(wr, 0), 1), color=t.CARB, bgcolor=t.SURFACE_2),
             ft.Row([wbtn(250), wbtn(500), wbtn(750)], spacing=8)], spacing=10))
 
-        ex_desc = comp.num_field("Entreno (p. ej. Natación 30 min)", "")
-        ex_kcal = comp.num_field("kcal quemadas", "")
-        ex_dur = comp.num_field("Minutos (opcional)", "")
-        ex_status = ft.Text("", size=12)
-
-        def add_ex(e=None):
-            d = (ex_desc.value or "").strip()
-            k = int(_num(ex_kcal.value, 0))
-            if not d or k <= 0:
-                ex_status.value, ex_status.color = "Pon descripción y kcal.", t.FAT
-                page.update()
-                return
-            dur = _num(ex_dur.value, 0)
-            repo.add_workout(conn, Workout(description=d, calories=k,
-                                           duration_min=int(dur) if dur > 0 else None))
-            render()
-            page.update()
-
-        ex_list = ft.Column(spacing=2)
-        for wk in repo.get_workouts_for_date(conn, today):
-            ex_list.controls.append(ft.Row([
-                ft.Text(f"{wk.description} — {wk.calories} kcal", color=t.MUTED, size=12, expand=True),
-                ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_size=18, icon_color=t.FAT,
-                              on_click=lambda e, wid=wk.id: (repo.delete_workout(conn, wid), render(), page.update()))],
+        # Hábitos
+        hab_col = ft.Column(spacing=6)
+        habits = habrepo.list_habits(conn)
+        done_ids = habrepo.done_ids_for_date(conn, today)
+        if not habits:
+            hab_col.controls.append(ft.Text("Crea hábitos en Yo → Hábitos.", color=t.MUTED))
+        for h in habits:
+            hab_col.controls.append(ft.Row([
+                ft.Checkbox(value=(h.id in done_ids),
+                            on_change=lambda e, hid=h.id: toggle_habit(hid, e.control.value)),
+                ft.Text(h.name, color=t.TEXT, expand=True),
+                ft.Text(f"🔥 {habrepo.streak(conn, h.id, today)}",
+                        color=t.MUTED, size=12)],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER))
-
-        exercise_card = comp.card(ft.Column([
-            comp.label("Ejercicio"),
-            ft.Text(f"{summary.exercise_kcal} kcal quemadas hoy", color=t.TEXT, weight=ft.FontWeight.W_500),
-            ex_list, ex_desc, ex_kcal, ex_dur,
-            comp.secondary_button("Añadir entreno", add_ex), ex_status], spacing=10))
+        hab_card = comp.card(ft.Column([comp.label("Hábitos de hoy"), hab_col], spacing=10))
 
         data_col.controls.clear()
         data_col.controls.extend([
             ft.Row([ft.Text("Hoy", size=26, weight=ft.FontWeight.BOLD, color=t.TEXT),
                     ft.Text(today.strftime("%d/%m/%Y"), color=t.MUTED)],
                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            hero, macros, meals_card, water_card, exercise_card])
+            cal_card, tiles, water_card, hab_card])
 
     def on_plan(e=None) -> None:
         rec_body.controls.clear()
@@ -176,7 +146,7 @@ def build_today(state, page: ft.Page) -> ft.Control:
         page.update()
 
     rec_card = comp.card(ft.Column([
-        comp.label("Recomendación"),
+        comp.label("Recomendación de comida"),
         comp.primary_button("Plan de comida para hoy", on_plan),
         comp.secondary_button("Idea siguiente comida", on_next),
         rec_body], spacing=10))

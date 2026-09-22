@@ -8,17 +8,16 @@ from datetime import date
 from kcn.core.models import DayType, UserProfile
 from kcn.core.summary import DaySummary, build_day_summary
 from kcn.data import repository as repo
+from kcn.fitness import repo as fitness_repo
 
 
 def get_day_summary(conn: sqlite3.Connection, profile: UserProfile,
                     on: date | None = None,
                     day_type: DayType | None = None) -> DaySummary:
-    """Resumen del día `on`. Si no se indica el tipo de día, se deduce:
-    día de entreno si hay algún entreno registrado, si no, descanso.
-    """
     on = on or date.today()
     entries = repo.get_entries_for_date(conn, on)
-    exercise_kcal = repo.day_workout_calories(conn, on)
+    exercise_kcal = (repo.day_workout_calories(conn, on)
+                     + fitness_repo.session_calories_for_date(conn, on))
     water_ml = repo.day_water_ml(conn, on)
 
     if day_type is None:
